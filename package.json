@@ -1,0 +1,27 @@
+{
+  "name": "rag",
+  "version": "1.0.0",
+  "description": "USING RAG ",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@langchain/community": "^0.3.53",
+    "@langchain/core": "^0.3.72",
+    "@langchain/google-genai": "^0.2.16",
+    "@qdrant/js-client-rest": "^1.15.1",
+    "cheerio": "^1.1.2",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "express-ejs-layouts": "^2.5.1",
+    "jsdom": "^26.1.0",
+    "langchain": "^0.3.31",
+    "multer": "^2.0.2",
+    "pdf-parse": "^1.1.1"
+  }
+}

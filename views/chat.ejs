@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📒 Notebook LLM</title>
+  <style>
+    body { font-family: "Fira Code", monospace; background: #121212; color: #e0e0e0; margin: 0; padding: 0; }
+    header { background: #1f1f1f; padding: 1rem; text-align: center; font-size: 1.5rem; font-weight: bold; border-bottom: 1px solid #333; }
+    .container { padding: 2rem; max-width: 900px; margin: auto; }
+    .card { background: #1e1e1e; border-radius: 10px; padding: 1.5rem; box-shadow: 0 4px 10px rgba(0,0,0,0.4); margin-bottom: 2rem; }
+    h3 { margin-bottom: 1rem; color: #00d4ff; }
+    input, textarea, button { background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 5px; padding: 0.6rem; width: 100%; margin-top: 0.5rem; margin-bottom: 1rem; }
+    button { background: #0078d7; border: none; cursor: pointer; transition: background 0.3s; padding: 0.6rem 1.2rem; }
+    button:hover { background: #005bb5; }
+    .message { margin-bottom: 1rem; }
+    .user { color: #ffb347; font-weight: bold; }
+    .bot { color: #90ee90; margin-left: 1rem; }
+    hr { border: 0; border-top: 1px solid #333; margin: 1rem 0; }
+    .sources { font-size: 0.9rem; margin-top: 1rem; color: #aaa; }
+  </style>
+</head>
+<body>
+  <header>⚡ Notebook LLM</header>
+  <div class="container">
+
+    <!-- Upload Sources -->
+    <div class="card">
+      <h3>📂 Upload Sources</h3>
+      <form action="/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" />
+        <input type="url" name="website" placeholder="https://example.com" />
+        <button type="submit">Upload</button>
+      </form>
+    </div>
+
+    <!-- Chat History -->
+    <div class="card">
+      <h3>💬 Chat History</h3>
+      <% if (messages.length > 0) { %>
+        <% messages.forEach(m => { %>
+          <div class="message">
+            <div class="user">You: <%= m.user %></div>
+            <div class="bot">Bot: <%= m.bot %></div>
+          </div>
+          <hr />
+        <% }) %>
+      <% } else { %>
+        <p>No messages yet. Start chatting below 👇</p>
+      <% } %>
+    </div>
+
+    <!-- Ask Question -->
+    <div class="card">
+      <h3>🤖 Ask a Question</h3>
+      <form action="/chat" method="post">
+        <textarea name="question" rows="3" placeholder="Type your question here..."></textarea>
+        <button type="submit">Ask</button>
+      </form>
+    </div>
+
+    <!-- Sources -->
+    <% if (sources.length > 0) { %>
+      <div class="card">
+        <h3>📌 Sources</h3>
+        <div class="sources">
+          <% sources.forEach(s => { %>
+            <div>🔗 <%= s %></div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+</body>
+</html>

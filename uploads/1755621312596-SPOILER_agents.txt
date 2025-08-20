@@ -1,0 +1,205 @@
+import 'dotenv/config';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import axios from 'axios';
+import { exec } from "child_process";
+import fs from "fs";
+import path from "path";
+
+console.log("Gemini API Key:", process.env.GEMINI_API_KEY ? "Loaded ✅" : "Missing ❌");
+
+// Create Gemini client
+const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// ---------------------- TOOLS ----------------------
+
+async function getWeatherDetailsByCity(cityname = '') {
+  const url = `https://wttr.in/${cityname.toLowerCase()}?format=%C+%t`;
+  const { data } = await axios.get(url, { responseType: 'text' });
+  return `The current weather of ${cityname} is ${data}`;
+}
+
+async function executeCommand(cmd = '') {
+  return new Promise((res) => {
+    exec(cmd, (error, stdout) => {
+      if (error) {
+        return res(`Error running command: ${error.message}`);
+      } else {
+        res(stdout.trim() || "Command executed successfully");
+      }
+    });
+  });
+}
+
+async function writeFile(filepath = '', content = '') {
+  try {
+    const dir = path.dirname(filepath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filepath, content, 'utf8');
+    return `File ${filepath} created successfully`;
+  } catch (error) {
+    return `Error creating file: ${error.message}`;
+  }
+}
+
+async function createDirectory(dirPath = '') {
+  try {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+      return `Directory ${dirPath} created successfully`;
+    }
+    return `Directory ${dirPath} already exists`;
+  } catch (error) {
+    return `Error creating directory: ${error.message}`;
+  }
+}
+
+async function getGithubUserInfoByUsername(username = '') {
+  const url = `https://api.github.com/users/${username.toLowerCase()}`;
+  const { data } = await axios.get(url);
+  return JSON.stringify({
+    login: data.login,
+    id: data.id,
+    name: data.name,
+    location: data.location,
+    twitter_username: data.twitter_username,
+    public_repos: data.public_repos,
+    public_gists: data.public_gists,
+    user_view_type: data.user_view_type,
+    followers: data.followers,
+    following: data.following,
+  });
+}
+
+const TOOL_MAP = {
+  getWeatherDetailsByCity,
+  getGithubUserInfoByUsername,
+  executeCommand,
+  writeFile,
+  createDirectory,
+};
+
+// ---------------------- MAIN ----------------------
+
+async function main() {
+  const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  const SYSTEM_PROMPT = `
+    You are an AI MODEL who works on START, THINK, TOOL, OBSERVE and OUTPUT format.
+    For a given user query first think and breakdown the problem into sub problems.
+    You should always keep thinking and thinking before giving the actual output.
+    Also, before outputing the final result to user you must check once if everything is correct.
+
+    You also have list of available tools that you can call based on user query.
+    
+    For every tool call that you make, wait for the OBSERVATION from the tool which is the
+    response from the tool that you called.
+
+    Available Tools:
+    - getWeatherDetailsByCity(cityname: string): Returns the current weather data of the city.
+    - getGithubUserInfoByUsername(username: string): Returns the public info about the github user using github api.
+    - executeCommand(command: string): Takes a command as arg and executes it on user's machine and returns the output
+    - writeFile(filepath: string, content: string): Creates a file with the given content at the specified path
+    - createDirectory(dirPath: string): Creates a directory at the specified path
+
+    Rules:
+    - Strictly follow the output JSON format
+    - Always follow the output in sequence that is START, THINK, TOOL, OBSERVE and OUTPUT.
+    - Always perform only one step at a time and wait for other step.
+    - Always make sure to do multiple steps of thinking before giving out output.
+    - For file creation, use writeFile tool instead of executeCommand
+    - For directory creation, use createDirectory tool instead of executeCommand
+    - Keep content strings simple and avoid complex escaping
+    - Each JSON response must be a single line with proper escaping
+
+    Output JSON Format (must be single line):
+    {"step": "START|THINK|TOOL|OBSERVE|OUTPUT", "content": "string", "tool_name": "string", "input": "string"}
+    
+    For writeFile tool use:
+    {"step": "TOOL", "tool_name": "writeFile", "input": "filepath,content"}
+    Where input is comma-separated: filepath,content
+  `;
+
+  const messages = [
+    { role: "model", parts: [{ text: SYSTEM_PROMPT }] },
+    { role: "user", parts: [{ text: "Create an E commerce website" }] },
+  ];
+
+  while (true) {
+    const response = await model.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: messages,
+    });
+
+    let rawContent = response.response.text().trim();
+    
+    // Clean up the response
+    rawContent = rawContent.replace(/```json\n?/g, "").replace(/```/g, "").trim();
+    
+    // Extract JSON objects more carefully
+    const jsonLines = rawContent.split('\n').filter(line => line.trim().startsWith('{'));
+    
+    if (jsonLines.length === 0) {
+      console.log("Raw response:", rawContent);
+      continue;
+    }
+
+    for (const jsonLine of jsonLines) {
+      let parsedContent;
+      try {
+        parsedContent = JSON.parse(jsonLine.trim());
+      } catch (err) {
+        console.error("❌ Failed to parse JSON:", jsonLine);
+        continue;
+      }
+
+      messages.push({
+        role: "model",
+        parts: [{ text: JSON.stringify(parsedContent) }],
+      });
+
+      // Handle steps
+      switch (parsedContent.step) {
+        case "START":
+          console.log(`🔥`, parsedContent.content);
+          break;
+
+        case "THINK":
+          console.log(`\t🧠`, parsedContent.content);
+          break;
+
+        case "TOOL": {
+          const toolName = parsedContent.tool_name;
+          if (!TOOL_MAP[toolName]) {
+            console.error(`❌ No such tool: ${toolName}`);
+            continue;
+          }
+
+          let toolResult;
+          if (toolName === 'writeFile') {
+            const [filepath, ...contentParts] = parsedContent.input.split(',');
+            const content = contentParts.join(','); // Rejoin in case content had commas
+            toolResult = await TOOL_MAP[toolName](filepath.trim(), content.trim());
+          } else {
+            toolResult = await TOOL_MAP[toolName](parsedContent.input);
+          }
+          
+          console.log(`🛠️ ${toolName}(${parsedContent.input.substring(0, 50)}...) =>`, toolResult);
+
+          messages.push({
+            role: "model",
+            parts: [{ text: JSON.stringify({ step: "OBSERVE", content: toolResult }) }],
+          });
+          break;
+        }
+
+        case "OUTPUT":
+          console.log(`🤖`, parsedContent.content);
+          return; // stop loop
+      }
+    }
+  }
+}
+
+main().catch(console.error);
