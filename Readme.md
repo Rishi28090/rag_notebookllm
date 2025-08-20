@@ -46,6 +46,8 @@ Create a .env file with your environment variables:
 PORT=3000
 OPENAI_API_KEY=your_openai_key
 QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=your_api_key
+
 
 
 Start the server:
